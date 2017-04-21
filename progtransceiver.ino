@@ -20,6 +20,7 @@ IRsend irsend;
 /*
  * Данные, полученные экспериментальным путём
  */
+double koff=0.26;
 int distancePrep=20;
 int distanceCritical=40;
 int distanceWow=5;
@@ -42,8 +43,9 @@ void setup() {
  * В коде периодически происходит вывод информации в монитор порта, что позволяет легко заниматься отладкой программы
  */
 void loop() {
-  motorRight.setSpeed(150);
-  motorLeft.setSpeed(150);
+  
+  motorRight.setSpeed(70);
+  motorLeft.setSpeed(70);
   servo.write(angle);
   /*
    * Выполнения движения вперед,если функция checkPrep() имеет значение false 
@@ -55,13 +57,13 @@ void loop() {
     motorLeft.setSpeed(150);
     motorRight.run(FORWARD);
     motorLeft.run(FORWARD);
-    irsend.sendSony(0xa90, 3);
+    irsend.sendNEC(0x1, 3);
   }
   else{
     Serial.println("Stop");
     motorRight.run(RELEASE);
     motorLeft.run(RELEASE);
-    irsend.sendSony(0xa90, 3);
+    irsend.sendNEC(0x1, 3);
     delay(100);
     /*
      * При значении флага true движение назад
@@ -72,15 +74,15 @@ void loop() {
       motorLeft.setSpeed(200);
       motorRight.run(BACKWARD);
       motorLeft.run(BACKWARD);
-      irsend.sendSony(0xa90, 3);
+      irsend.sendNEC(0x1, 3);
       delay(400);
     }
     else{
       if(angle>60){
-        corr(true);
+        corr(true, angle);
       }
       else{
-        corr(false);
+        corr(false, angle);
       }
     }
   }
@@ -89,9 +91,12 @@ void loop() {
    */
   Serial.println("Correct angle");
   
-  switch (angle){
-    case 180: flgPlus=true;
-    case 0: flgPlus=false;
+  
+  if(angle==30){
+    flgPlus=true;
+  }
+  if(angle==150){
+    flgPlus=false;
   }
   
   if(flgPlus){
@@ -102,7 +107,7 @@ void loop() {
   }
   
   Serial.println("Finish correction, run");
-  irsend.sendSony(0xa90, 3);
+  irsend.sendNEC(0x1, 3);
   delay(100);
 }
 /*
@@ -139,37 +144,39 @@ boolean checkDistance(){
 }
 /*
  * Функция, реализующая корректировку агента, в зависимости от положение лидера
- * Параметр: флаг, отвечающий за необходимость поворота вправо, инча влево 
+ * Параметр: флаг, отвечающий за необходимость поворота вправо, инча влево; угол поворота сервопривода в данный момент для обеспечений поворота
  */
-void corr(boolean turnRight){
+void corr(boolean turnRight, int angle){
   Serial.println("Correction!");
   servo.write(90);
   
   if(turnRight){
     Serial.println("Turn right");    
     
-    while(ultrasonic.Ranging(CM)<distancePrep){
       motorRight.setSpeed(200);
       motorLeft.setSpeed(200);
       Serial.println("Turn");
       motorLeft.run(FORWARD);
       motorRight.run(BACKWARD);
-      irsend.sendSony(0xa90, 3);
-      delay(20);
-    }
+      irsend.sendNEC(0x1, 3);
+      delay(ceil((angle-90)/koff));
+      motorLeft.run(RELEASE);
+      motorRight.run(RELEASE);
+    
   }
   else{
     Serial.println("Turn left");
     
-    while(ultrasonic.Ranging(CM)<distancePrep){
       motorRight.setSpeed(200);
       motorLeft.setSpeed(200);
       Serial.println("Turn");
       motorLeft.run(BACKWARD);
       motorRight.run(FORWARD);
-      irsend.sendSony(0xa90, 3);
-      delay(20);
-    }
+      irsend.sendNEC(0x1, 3);
+      delay(ceil((90-angle)/koff));
+      motorLeft.run(RELEASE);
+      motorRight.run(RELEASE);
+    
   }
 }
 
