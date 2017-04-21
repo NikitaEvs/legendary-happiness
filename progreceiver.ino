@@ -11,8 +11,8 @@
 #include <Ultrasonic.h>
 #include <AFMotor.h>
 
-AF_DCMotor motorLeft(3, MOTOR12_64KHZ);
-AF_DCMotor motorRight(4,MOTOR12_64KHZ);
+AF_DCMotor motorLeft(4, MOTOR12_64KHZ);
+AF_DCMotor motorRight(3,MOTOR12_64KHZ);
 
 Ultrasonic ultrasonic(12,13);
 
@@ -25,33 +25,42 @@ char command = '0';
 /*
  * Данные, полученные экспериментальным путём
  */
+double koff=0.26;
 int distancePrep=20;
 int distanceCritical=40;
 int angle=30;
 
 boolean flgPlus=true;
+boolean flgIR=false;
 
 void setup() {
-  motorRight.setSpeed(200);
-  motorLeft.setSpeed(200);
   servo.attach(9);
   Serial.begin(9600);
   servo.write(90);
   irrecv.enableIRIn();
   delay(1000);
+  while(!flgIR){
+    motorRight.setSpeed(100);
+    motorLeft.setSpeed(100);
+    motorRight.run(FORWARD);
+    motorLeft.run(FORWARD);
+    input();
+    if(results.value==0x1){
+      flgIR=true;
+    }
+    delay(20);
+  }
 }
 
 void loop() {
-  motorRight.setSpeed(150);
-  motorLeft.setSpeed(150);
+  
   servo.write(angle);
   /*
    * Проверка на наличие ИК сигнала перед агентом
    * Вызов функции коррекции при обнаружение ИК сигнала 
    */
   input();
-  
-  if(results.value==0xCF713D6F){
+  if(results.value==0x1){
     clean();
     if(angle!=90){
       if(angle>60){
@@ -65,20 +74,24 @@ void loop() {
   /*
    * Проверка дистанции перед агентом
    */
-  while(distance()<10){
+  motorRight.setSpeed(150);
+  motorLeft.setSpeed(150);
+  if(ultrasonic.Ranging(CM)< distancePrep){
     motorRight.run(RELEASE);
     motorLeft.run(RELEASE);
-    delay(200);
   }
-  
-  motorRight.run(FORWARD);
-  motorLeft.run(FORWARD);
+  else{
+    motorRight.run(FORWARD);
+    motorLeft.run(FORWARD);
+  }
   /*
    * Корректировка угла сервопривода для достижения обзора в 180 градусов
    */
-  switch (angle){
-    case 180: flgPlus=true;
-    case 0: flgPlus=false;
+  if(angle==30){
+    flgPlus=true;
+  }
+  if(angle==150){
+    flgPlus=false;
   }
   
   if(flgPlus){
@@ -88,7 +101,7 @@ void loop() {
     angle-=30;
   }
   
-  delay(50);
+  delay(20);
 } 
 /*
  * Функция, возвращающая среднее значение показаний ультразвукового датчика
@@ -102,7 +115,7 @@ int distance(){
     distances/=2;
     delay(10);
   }
-  
+  Serial.println(distances); 
   return distances;
 }
 /*
@@ -113,25 +126,29 @@ void corr(boolean flgRight){
   servo.write(90);
   
   if(flgRight){
-    
-    while(results.value!=0xCF713D6F){
-      input();
-      motorRight.run(BACKWARD);
+    Serial.println("Turn right");    
+      motorRight.setSpeed(200);
+      motorLeft.setSpeed(200);
+      Serial.println("Turn");
       motorLeft.run(FORWARD);
-      delay(20);
-    }
-    
+      motorRight.run(BACKWARD);
+      irsend.sendNEC(0x1, 3);
+      delay(ceil((angle-90)/koff));
+      motorLeft.run(RELEASE);
+      motorRight.run(RELEASE);
     clean();
   }
   else{
-    
-    while(results.value!=0xCF713D6F){
-      input();
-      motorRight.run(FORWARD);
+    Serial.println("Turn left");
+      motorRight.setSpeed(200);
+      motorLeft.setSpeed(200);
+      Serial.println("Turn");
       motorLeft.run(BACKWARD);
-      delay(20);
-    }
-    
+      motorRight.run(FORWARD);
+      irsend.sendNEC(0x1, 3);
+      delay(ceil((90-angle)/koff));
+      motorLeft.run(RELEASE);
+      motorRight.run(RELEASE);
     clean();
   }
 }
@@ -152,4 +169,3 @@ void input(){
 void clean(){
   results.value=0;
 }
-
